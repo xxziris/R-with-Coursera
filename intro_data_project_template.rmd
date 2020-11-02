@@ -1,0 +1,128 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+load("~/Dropbox/R - Coursera/Assignment/brfss2013.RData")
+```
+
+
+* * *
+
+## Part 1: Data
+Observations in this sample are collected via phone calls to adult (aged 18 and above) living in the US. As this is an observational study, only correlations between the haviors and chronic diseases can be derived but not causations.
+
+The samples taken are impacted by biases like "non-response" bias (e.g. if the interviewee didn't answer the phone callse) and convenient response (e.g. interviewee with landlines/cell phones can be easily accessed. Populations that's hard to be reached by calls are naturally excluded from the sampling). Due to the impact of sampling biases, the conclusion might not be generalized to the whole population.
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+Does the income level affect Medicare coverage?
+(To analyze the correlation between Medicare coverage and income level)
+
+**Research quesion 2:**
+How does education level impacts good seatbelt usage (defined by "always wearing seatbelt")?
+(To analyze the correlation between seatbelt usage and education level with gender taken into consideration)
+
+**Research quesion 3:**
+How does alcohol consumption affects ones marital status?
+(To analyze if the marital status distribution varies if one is a binge drinker or not.
+Binge drinker is defined as males having five or more drinks on one occasion, females having four or more drinks on one occasion)
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research quesion 1:**
+
+Extract relevant columns to a new table (exlude medicare = NA & income2 = NA)
+```{r}
+Q1 <- brfss2013 %>%
+  select(medicare, income2) %>%
+  filter(medicare != "NA", income2 != "NA")
+
+```
+
+Plot the relationship between income level and medicare coverage
+```{r}
+ggplot(Q1, aes(fill = medicare, y = income2)) + geom_bar(position = "fill")
+```
+
+As shown in the chart, among the samples, when income > $10k, with the increase of income, the medicare coverage shrinks from ~70% to ~20%. When income is below $10k, roughly half of the people is covered by medicare.
+
+**Research quesion 2:**
+Extract the data to a new table and filter out responses with NA. Responses that "never drive or ride in a car" is also excluded due to inappicability to the research question.
+```{r}
+Q2 <- brfss2013 %>%
+  select(educa, seatbelt, sex) %>%
+  filter(seatbelt != "NA", seatbelt != "Never drive or ride in a car", educa != "NA", sex != "NA")
+
+```
+
+We will take the "always wear seatbelt" as a mark of "good seatbelt usage".
+```{r}
+Q2 <- Q2 %>%
+  mutate(cat_seatbelt = ifelse(seatbelt == "Always", 1, 0)) 
+
+```
+
+Calculate the percentage of people always wear seatbelt by education level and gender:
+```{r}
+Q2_graph <- Q2 %>%
+  filter(complete.cases(cat_seatbelt)) %>% 
+  count(educa, cat_seatbelt, sex) %>% 
+  group_by(educa, sex) %>% 
+  transmute(cat_seatbelt, Percentage=n/sum(n)*100) %>%
+  filter(cat_seatbelt == 1)
+```
+
+
+Plot the correlations in a line chart:
+```{r}
+ggplot(data = Q2_graph, aes(x = educa, y = Percentage, group = sex)) + geom_line(aes(linetype = sex)) + geom_point() + theme(axis.text.x = element_text(angle = 40, hjust = 1)) + scale_y_continuous(name ="%Always Wear Seatbelt")
+```
+Hence, overall Female has a higher rate to wear seatbelt than man across all educational levels. For both female and male, with the increase of education level, the percentage of always wearing seatbelt first dropped and then rise again. 
+The drop potentially can be caused by the higher tendency of irresponsible behaviors during teenage days, whereas with college education, people become more mature and responsible, leading to the increase in the percentage.
+
+**Research quesion 3:**
+Extract the relevant columns into a separate table:
+```{r}
+Q3 <- brfss2013 %>%
+  select(drnk3ge5, sex, marital) %>%
+  filter (sex != "NA", drnk3ge5 != "NA", marital != "NA")
+```
+
+Categorize marital status into 2 groups: for "married" and "a member of an unmarried couple", consider them as group 'couple', for other marital status, consider them as group 'single'.
+```{r}
+Q3 <- Q3 %>%
+  mutate(grp_marital = ifelse(marital == "Married"| marital == "A member of an unmarried couple", "Couple", "Single")) 
+  
+```
+
+Plot a graph to illustrate the correlation between number of binge drinking occasions and grouping of marital status (grp_marital), which is cateogrized by sex.
+```{r}
+ggplot(Q3, mapping = aes(x = drnk3ge5, fill = as.factor(sex))) + 
+  geom_bar(stat = 'count', position = 'stack') + facet_grid(grp_marital~.)
+```
+As shown, for group "couple", the count of non binge drinking is higher than that of group "single". However, the shape of the graphs is similar across group "couple" and group "single". Hence, we might conclude that within the sample of research, the marital status do not have a strong correlation with binge drinking occasions. 
+Besides, among single samples, there are more female non-binge drinkers than that of male, while the ratio of which is almost 1:1 among group "couple".
